@@ -1,0 +1,15 @@
+pandas
+numpy
+yfinance
+mplfinance
+matplotlib
+tensorflow
+scikit-learn
+tensorflow
+numpy
+pandas
+matplotlib
+seaborn
+scikit-learn
+mplfinance
+yfinance
