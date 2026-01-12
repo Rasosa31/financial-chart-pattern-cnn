@@ -10,7 +10,7 @@ BATCH_SIZE = 32
 # =========================
 # Load model
 # =========================
-model = load_model("models/cnn_chart_model.h5")
+model = load_model("models/cnn_chart_model.keras")
 
 # =========================
 # Test data generator

@@ -8,7 +8,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 # =========================
 IMG_SIZE = (224, 224)
 BATCH_SIZE = 32
-MODEL_PATH = "models/cnn_chart_model.h5"
+MODEL_PATH = "models/cnn_chart_model.keras"
 OUTPUT_PATH = "data/test/prices.csv"
 
 # ⚠️ ajusta esto según tu dataset original
