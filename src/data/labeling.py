@@ -1,14 +1,17 @@
-import pandas as pd
+def label_window(prices, threshold=0.002):
+    """
+    prices: pandas Series con precios de cierre de la ventana
+    threshold: retorno mínimo para evitar ruido
+    """
 
-def label_window(prices, threshold=0.02):
-    start_price = prices.iloc[0]
-    end_price = prices.iloc[-1]
+    start_price = float(prices.iloc[0])
+    end_price = float(prices.iloc[-1])
 
     ret = (end_price - start_price) / start_price
 
-    if ret >= threshold:
-        return "bullish"
-    elif ret <= -threshold:
-        return "bearish"
+    if ret > threshold:
+        return "up"
+    elif ret < -threshold:
+        return "down"
     else:
-        return "sideways"
+        return None
