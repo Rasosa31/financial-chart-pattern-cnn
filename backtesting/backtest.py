@@ -5,20 +5,17 @@ import matplotlib.pyplot as plt
 # ======================
 # PARAMETERS
 # ======================
-COST_PER_TRADE = 0.001  # 0.1% por trade
+THRESHOLD = 0.7
+HOLD_DAYS = 120
+COST_PER_TRADE = 0.001
+SPLIT_DATE = "2021-01-01"
 
 # ======================
 # LOAD DATA
 # ======================
-preds = pd.read_csv("outputs/predictions.csv")
-prices = pd.read_csv("data/raw/prices.csv")
+preds = pd.read_csv("outputs/predictions.csv", parse_dates=["date"])
+prices = pd.read_csv("data/raw/prices.csv", parse_dates=["date"])
 
-preds["date"] = pd.to_datetime(preds["date"])
-prices["date"] = pd.to_datetime(prices["date"])
-
-# ======================
-# ALIGN DATA
-# ======================
 df = preds.merge(
     prices[["date", "close"]],
     on="date",
@@ -30,133 +27,97 @@ df = preds.merge(
 # ======================
 df["next_close"] = df["close"].shift(-1)
 df["market_return"] = df["next_close"] / df["close"] - 1
+df.dropna(inplace=True)
 
-
-#===============
 # ======================
-# THRESHOLD OPTIMIZATION
+# SIGNAL GENERATION
 # ======================
+df["raw_signal"] = (df["prob_up"] >= THRESHOLD).astype(int)
 
-results = []
+df["position"] = 0
+hold_counter = 0
 
-thresholds = np.arange(0.50, 0.81, 0.05)
+for i in range(len(df)):
+    if hold_counter > 0:
+        df.loc[i, "position"] = 1
+        hold_counter -= 1
+    elif df.loc[i, "raw_signal"] == 1:
+        df.loc[i, "position"] = 1
+        hold_counter = HOLD_DAYS - 1
 
-for THRESHOLD in thresholds:
+df["trade"] = (
+    (df["position"] == 1) &
+    (df["position"].shift(1) == 0)
+).astype(int)
 
-    temp = df[["date", "prob_up", "market_return"]].copy()
-
-    # Position based on threshold
-    temp["position"] = np.where(temp["prob_up"] >= THRESHOLD, 1, 0)
-
-    # Trading costs (entry/exit)
-    # Trading costs (ONLY entries: 0 -> 1)
-    temp["trade"] = (
-        (temp["position"] == 1) &
-        (temp["position"].shift(1) == 0)
-    ).astype(int)
-
-    transaction_cost = 0.001  # 0.1%
-
-    
-    temp["strategy_return"] = (
-        temp["position"] * temp["market_return"]
-        - temp["trade"] * transaction_cost
-    )
-
-    temp = temp.dropna().reset_index(drop=True)
-
-    # Equity
-    temp["equity"] = (1 + temp["strategy_return"]).cumprod()
-    temp["peak"] = temp["equity"].cummax()
-    temp["drawdown"] = temp["equity"] / temp["peak"] - 1
-
-    total_return = temp["equity"].iloc[-1] - 1
-    max_dd = temp["drawdown"].min()
-
-    sharpe = (
-        temp["strategy_return"].mean()
-        / temp["strategy_return"].std()
-        * np.sqrt(252)
-        if temp["strategy_return"].std() != 0 else 0
-    )
-
-    trades = temp["trade"].sum()
-
-    results.append({
-        "threshold": THRESHOLD,
-        "return": total_return,
-        "sharpe": sharpe,
-        "max_drawdown": max_dd,
-        "trades": trades
-    })
-
-results_df = pd.DataFrame(results)
-
-print("\n📊 THRESHOLD OPTIMIZATION RESULTS")
-print(results_df.round(3))
-
-#===============
-# ======================
-# STRATEGY (probability filter)
-# ======================
-THRESHOLD = 0.9
-
-df["position"] = np.where(df["prob_up"] >= THRESHOLD, 1, 0)
-df["trade"] = df["position"].diff().abs().fillna(0)
 df["strategy_return"] = (
     df["position"] * df["market_return"]
     - df["trade"] * COST_PER_TRADE
 )
 
-df = df.dropna().reset_index(drop=True)
-
-# --- SHARPE RATIO ---
-daily_mean = df["strategy_return"].mean()
-daily_std = df["strategy_return"].std()
-
-sharpe_ratio = (daily_mean / daily_std) * (252 ** 0.5)
-
+df.dropna(inplace=True)
 
 # ======================
-# EQUITY CURVES
+# SPLIT IS / OOS
 # ======================
-df["market_equity"] = (1 + df["market_return"]).cumprod()
-df["strategy_equity"] = (1 + df["strategy_return"]).cumprod()
+is_df = df[df["date"] < SPLIT_DATE].copy()
+oos_df = df[df["date"] >= SPLIT_DATE].copy()
 
 # ======================
-# DRAWDOWN
+# METRICS FUNCTION
 # ======================
-df["strategy_peak"] = df["strategy_equity"].cummax()
-df["strategy_drawdown"] = df["strategy_equity"] / df["strategy_peak"] - 1
-max_drawdown = df["strategy_drawdown"].min()
+def compute_metrics(data, label):
+    print(f"\n📊 {label} RESULTS")
+    print("-" * 25)
+
+    if len(data) == 0:
+        print("No data / no trades in this period.")
+        return None
+
+    equity = (1 + data["strategy_return"]).cumprod()
+    peak = equity.cummax()
+    drawdown = equity / peak - 1
+
+    sharpe = (
+        data["strategy_return"].mean()
+        / data["strategy_return"].std()
+        * np.sqrt(252)
+        if data["strategy_return"].std() != 0 else 0
+    )
+
+    print(f"Total Return : {equity.iloc[-1] - 1:.2%}")
+    print(f"Sharpe Ratio : {sharpe:.2f}")
+    print(f"Max Drawdown: {drawdown.min():.2%}")
+    print(f"Trades      : {data['trade'].sum()}")
+
+    return equity
 
 # ======================
-# METRICS
+# RESULTS
 # ======================
-total_strategy_return = df["strategy_equity"].iloc[-1] - 1
-total_market_return = df["market_equity"].iloc[-1] - 1
-hit_rate = (df["strategy_return"] > 0).mean()
-trades = df["position"].sum()
-
-print("\n📊 BACKTEST RESULTS")
-print("------------------")
-print(f"Total Strategy Return: {total_strategy_return:.2%}")
-print(f"Total Market Return : {total_market_return:.2%}")
-print(f"Hit Rate            : {hit_rate:.2%}")
-print(f"Trades              : {trades}")
-print(f"Max Drawdown        : {max_drawdown:.2%}")
-print(f"Sharpe Ratio        : {sharpe_ratio:.2f}")
+is_equity = compute_metrics(is_df, "IN-SAMPLE")
+oos_equity = compute_metrics(oos_df, "OUT-OF-SAMPLE")
 
 # ======================
-# PLOT EQUITY CURVE
+# TRADE METRICS (OOS)
+# ======================
+if oos_df["trade"].sum() == 0:
+    print("\n📈 OOS TRADE METRICS")
+    print("-" * 25)
+    print("No trades in Out-of-Sample period.")
+
+# ======================
+# PLOT
 # ======================
 plt.figure(figsize=(10, 5))
-plt.plot(df["date"], df["strategy_equity"], label="Strategy")
-plt.plot(df["date"], df["market_equity"], label="Buy & Hold", linestyle="--")
 
-plt.title("Equity Curve")
-plt.xlabel("Date")
-plt.ylabel("Equity")
+if is_equity is not None:
+    plt.plot(is_df["date"], is_equity, label="In-Sample")
+
+if oos_equity is not None:
+    plt.plot(oos_df["date"], oos_equity, label="Out-of-Sample")
+
+plt.title("Equity Curve (IS vs OOS)")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
