@@ -24,7 +24,7 @@ model = load_model(MODEL_PATH)
 # ======================
 # LOAD PRICES (ground truth timeline)
 # ======================
-prices = pd.read_csv("data/raw/prices.csv")
+prices = pd.read_csv("data/test/prices.csv")
 prices["date"] = pd.to_datetime(prices["date"])
 prices = prices.reset_index(drop=True)  # CRÍTICO
 
@@ -62,17 +62,22 @@ def extract_index(filename):
 
 indices = [extract_index(f) for f in filenames]
 
-# ======================
-# MAP INDEX → DATE
-# ======================
-dates = [prices.iloc[i]["date"] for i in indices]
+max_valid_index = len(prices) - 1
+valid_rows = [
+    (i, prob) for i, prob in zip(indices, pred_probs)
+    if i <= max_valid_index
+]
+
+dates = [prices.iloc[i]["date"] for i, _ in valid_rows]
+probs = [prob for _, prob in valid_rows]
+
 
 # ======================
 # BUILD FINAL DATAFRAME
 # ======================
 df = pd.DataFrame({
     "date": dates,
-    "prob_up": pred_probs
+    "prob_up": probs
 })
 
 df["prediction"] = np.where(df["prob_up"] >= 0.5, "up", "down")

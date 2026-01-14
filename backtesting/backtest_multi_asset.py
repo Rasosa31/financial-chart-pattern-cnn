@@ -9,10 +9,10 @@ DATA_DIR = Path("data/oos_multi_asset")  # carpeta con CSVs OOS
 TOP_PCT = 0.02                            # top 2% señales
 INITIAL_CAPITAL = 1.0
 
-#Antes del rankin codigo tempora
-print(symbol)
-print(df["prob_up"].describe())
-print("-" * 40)
+# #Antes del rankin codigo tempora
+# print(symbol)
+# print(df["prob_up"].describe())
+# print("-" * 40)
 
 # ===============================
 # SIGNAL GENERATION (RANKING)
@@ -24,6 +24,7 @@ def generate_signals_by_rank(df, top_pct=0.02):
     if df.empty:
         df["signal"] = False
         return df
+
 
     cutoff = df["prob_up"].quantile(1 - top_pct)
     df["signal"] = df["prob_up"] >= cutoff
@@ -90,7 +91,11 @@ def main():
             continue
 
         df = df.sort_values("date").reset_index(drop=True)
-
+#Antes del rankin codigo tempora
+        print(symbol)
+        print(df["prob_up"].describe())
+        print("-" * 40)
+        
         # --- generate ranking-based signals ---
         df = generate_signals_by_rank(df, TOP_PCT)
 
@@ -106,6 +111,7 @@ def main():
 
         metrics["Asset"] = symbol
         all_results.append(metrics)
+
 
     # ===============================
     # REPORT
