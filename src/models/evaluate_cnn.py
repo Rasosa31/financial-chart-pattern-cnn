@@ -32,9 +32,16 @@ test_data = test_gen.flow_from_directory(
 # Predictions
 # =========================
 y_prob = model.predict(test_data)
-y_pred = (y_prob > 0.5).astype(int).flatten()
+y_pred = (y_prob > 0.65).astype(int).flatten()
 y_true = test_data.classes
 
+#========================
+print("y_prob stats:")
+print("min :", y_prob.min())
+print("max :", y_prob.max())
+print("mean:", y_prob.mean())
+
+#========================
 
 # =========================
 # Classification Report
@@ -91,3 +98,10 @@ for t in thresholds:
     cm = confusion_matrix(y_true, y_pred)
     print("Confusion Matrix:")
     print(cm)
+# =========================
+from tensorflow.keras.models import load_model
+
+model = load_model("models/cnn_chart_model.keras")
+loss, acc = model.evaluate(val_data)
+
+print("Test accuracy:", acc)

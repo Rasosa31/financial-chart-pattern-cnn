@@ -219,3 +219,8 @@ predictions.csv
 
 # Environment
 .env
+
+capstone_tf/
+
+data/processed/
+data/interim/
